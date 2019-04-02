@@ -73,6 +73,7 @@ struct Variables {
 	bool isMongoosePlaced = false;
 	int sleepTime = 300;
 	bool mongooseDead = false;
+	int timeLeft = 200;
 };
 
 //---------------------------------------------------------------------------
@@ -123,11 +124,12 @@ int main()
 	int previousDirection = -1;
 	do {
 		renderGame(grid, message, vars);			//display game info, modified grid and messages
-		Sleep(vars.sleepTime);
-		if (_kbhit() || previousDirection == -1)
+		//Sleep(vars.sleepTime);
+		vars.timeLeft -= 1;
+		//if (_kbhit() || previousDirection == -1)
 			key = toupper(getKeyPress(previousDirection)); 	//read in  selected key: arrow or letter commands
-		else
-			key = previousDirection;
+		//else
+			//key = previousDirection;
 		if (isArrowKey(key))
 			updateGame(grid, maze, spot, key, message, mouse, vars);
 		else
@@ -141,7 +143,7 @@ int main()
 			}
 			else
 				message = "INVALID KEY!";  //set 'Invalid key' message
-	} while (!wantsToQuit(key) && vars.mouseEaten < MAXMICE && !vars.dead);		//while user does not want to quit
+	} while (!wantsToQuit(key) && vars.mouseEaten < MAXMICE && !vars.dead && vars.timeLeft != 0);		//while user does not want to quit
 	renderGame(grid, message, vars);			//display game info, modified grid and messages
 	endProgram(vars);						//display final message
 	return 0;
@@ -262,6 +264,7 @@ void updateGameData(const char g[][SIZEX], Item& spot, const int key, string& me
 		}
 		else
 			vars.dead = true;
+		break;
 	case WALL:
 		if (vars.invincible)
 		{
@@ -512,7 +515,7 @@ void renderGame(const char g[][SIZEX], const string& mess, Variables& vars)
 	else
 		showMessage(clRed, clYellow, 40, 4, "CHEAT MODE: ON |TO DEACTIVATE - ENTER C");
 	showMessage(clRed, clYellow, 40, 5, "TO QUIT  - ENTER 'Q'           ");
-
+	showMessage(clBlack, clWhite, 40, 6, ("TIME LEFT: " + tostring(vars.timeLeft)));
 	showMessage(clBlack, clWhite, 40, 7, ("NAME: " + vars.name));
 	showMessage(clBlack, clWhite, 40, 8, ("BEST SCORE: " + tostring(vars.bestScore)));
 	showMessage(clBlack, clWhite, 40, 9, ("MICE EATEN: " + tostring(vars.mouseEaten)) + "/10");
@@ -595,9 +598,12 @@ void endProgram(Variables& vars)
 	{
 		if (vars.mongooseDead)
 			showMessage(clRed, clYellow, 40, 7, "YOU DIED TO THE MONGOOSE");
-		else
+		else 
 			showMessage(clRed, clYellow, 40, 7, "YOU DIED");
 	}
+	if (vars.timeLeft == 0)
+		showMessage(clRed, clYellow, 40, 7, "YOU RAN OUT OF TIME");
+
 	system("pause");	//hold output screen until a keyboard key is hit
 }
 
