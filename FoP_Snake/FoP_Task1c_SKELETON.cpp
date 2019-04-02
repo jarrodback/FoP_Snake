@@ -65,6 +65,8 @@ struct Variables {
 	vector<Item> snake;
 	string name;
 	Item pill = { 0,0,PILL };
+	bool invincible = false;
+	int invincibleKeysPressed;
 };
 
 //---------------------------------------------------------------------------
@@ -235,8 +237,36 @@ void updateGameData(const char g[][SIZEX], Item& spot, const int key, string& me
 		vars.snake[0].x += dx;	//go in that X direction
 		break;
 	case TAIL:
+		if (vars.invincible)
+		{
+
+		}
+		else
+			vars.dead = true;
 	case WALL:
-		vars.dead = true;
+		if (vars.invincible)
+		{
+			int x = vars.snake[0].x + dx;
+			int y = vars.snake[0].y + dy;
+			if (x == 0)
+			{
+				vars.snake[0].x = SIZEX - 1;
+			}
+			if (x == SIZEX - 1)
+			{
+				vars.snake[0].x = 1;
+			}
+			if (y == 0)
+			{
+				vars.snake[0].y = SIZEY - 1;
+			}
+			if (y == SIZEY - 1)
+			{
+				vars.snake[0].y = 0;
+			}
+		}
+		else
+			vars.dead = true;
 		break;
 	case MOUSE:			//Hit a mouse and eat it
 		setItemInitialCoordinates(mouse, g);
@@ -284,8 +314,11 @@ void updateGameData(const char g[][SIZEX], Item& spot, const int key, string& me
 		}
 		vars.snake[0].y += dy;	//go in that Y direction
 		vars.snake[0].x += dx;	//go in that X direction
+		vars.invincible = true;
+		vars.invincibleKeysPressed = 20;
 		break;
 	}
+
 	if (vars.isPillPlaced == true)
 	{
 		vars.pillKeysPressed--;
@@ -294,6 +327,15 @@ void updateGameData(const char g[][SIZEX], Item& spot, const int key, string& me
 			vars.pill.x = -1;
 			vars.pill.y = -1;
 			vars.isPillPlaced = false;
+		}
+	}
+
+	if (vars.invincible)
+	{
+		vars.invincibleKeysPressed--;
+		if (vars.invincibleKeysPressed < 0)
+		{
+			vars.invincible = false;
 		}
 	}
 }
@@ -359,8 +401,6 @@ int getKeyPress()
   //KEEP THIS FUNCTION AS GIVEN
 	int keyPressed;
 	keyPressed = _getch();			//read in the selected arrow key or command letter
-	if (keyPressed == ' ')
-		return keyPressed;
 	while (keyPressed == 224) 		//ignore symbol following cursor key
 		keyPressed = _getch();
 
@@ -408,7 +448,7 @@ void renderGame(const char g[][SIZEX], const string& mess, Variables& vars)
 	string tostring(char x);
 	string tostring(int x);
 	void showMessage(const WORD backColour, const WORD textColour, int x, int y, const string& message);
-	void paintGrid(const char g[][SIZEX]);
+	void paintGrid(const char g[][SIZEX], const bool& invincible);
 	//display game title
 	showMessage(clBlack, clGreen, 0, 0, "___GAME___");
 	showMessage(clWhite, clBlack, 40, 0, "Fop Task 1C " + getDate() + " " + getTime());
@@ -426,14 +466,20 @@ void renderGame(const char g[][SIZEX], const string& mess, Variables& vars)
 	showMessage(clBlack, clWhite, 40, 8, ("BEST SCORE: " + tostring(vars.bestScore)));
 	showMessage(clBlack, clWhite, 40, 9, ("MICE EATEN: " + tostring(vars.mouseEaten)) + "/10");
 	showMessage(clBlack, clWhite, 40, 10, ("SCORE: " + tostring(vars.keysPressed)));
+	if (vars.invincible)
+		showMessage(clBlack, clWhite, 40, 12, ("INVINCIBLE!!!!!!: "));
+	else
+		showMessage(clBlack, clWhite, 40, 12, "");
+
+
 
 	//print auxiliary messages if any
 	showMessage(clBlack, clWhite, 40, 15, mess);	//display current message
 	//display grid contents
-	paintGrid(g);
+	paintGrid(g, vars.invincible);
 }
 
-void paintGrid(const char g[][SIZEX])
+void paintGrid(const char g[][SIZEX], const bool& invincible)
 { //display grid content on screen
 	selectBackColour(clBlack);
 	selectTextColour(clWhite);
@@ -445,7 +491,10 @@ void paintGrid(const char g[][SIZEX])
 			selectTextColour(clWhite);
 			if (g[row][col] == SPOT)
 			{
-				selectTextColour(clGreen);
+				if (invincible)
+					selectTextColour(clRed);
+				else
+					selectTextColour(clGreen);
 			}
 			if (g[row][col] == MOUSE)
 			{
@@ -453,7 +502,10 @@ void paintGrid(const char g[][SIZEX])
 			}
 			if (g[row][col] == TAIL)
 			{
-				selectTextColour(clGreen);
+				if (invincible)
+					selectTextColour(clRed);
+				else
+					selectTextColour(clGreen);
 			}
 			if (g[row][col] == PILL)
 			{
