@@ -67,6 +67,7 @@ struct Variables {
 	string name;
 	Item pill = { 0,0,PILL };
 	Item mongoose = { 0,0, MONGOOSE };
+	Item mongoosePrevious = { 0,0, MONGOOSE };
 	bool invincible = false;
 	int invincibleKeysPressed;
 	bool isMongoosePlaced = false;
@@ -361,18 +362,25 @@ void updateGameData(const char g[][SIZEX], Item& spot, const int key, string& me
 	}
 	if (vars.isMongoosePlaced)
 	{
+		int my, mx;
 		do {
-			int my = random(2);
-			int mx = random(2);
-			vars.mongoose.x += mx;
-			vars.mongoose.y += my;
-		} while (g[vars.mongoose.y][vars.mongoose.x] != TUNNEL);
+			my = rand() % 3;
+			mx = rand() % 3;
+			if (my == 2)
+				my = -1;
+			if (mx == 2)
+				mx = -1;
+		} while (g[vars.mongoose.y + my][vars.mongoose.x + mx] != TUNNEL);
+		vars.mongoose.x += mx;
+		vars.mongoose.y += my;
+		vars.mongoosePrevious = vars.mongoose;
 	}
 }
 void updateGrid(char grid[][SIZEX], const char maze[][SIZEX], const Item& spot, const Item& mouse, Variables& vars)
 { //update grid configuration after each move
 	void placeMaze(char g[][SIZEX], const char b[][SIZEX]);
 	void placeItem(char g[][SIZEX], const Item&);
+	void resetItem(char g[][SIZEX], const Item& item);
 
 	placeMaze(grid, maze);	//reset the empty maze configuration into grid
 	for each (Item item in (vars.snake))
@@ -387,6 +395,7 @@ void updateGrid(char grid[][SIZEX], const char maze[][SIZEX], const Item& spot, 
 	}
 	if (vars.mouseEaten == 3 && vars.isMongoosePlaced == false || vars.isMongoosePlaced == true)
 	{
+		resetItem(grid, vars.mongoosePrevious);
 		placeItem(grid, vars.mongoose);
 	}
 }
@@ -401,6 +410,10 @@ void placeMaze(char grid[][SIZEX], const char maze[][SIZEX])
 void placeItem(char g[][SIZEX], const Item& item)
 { //place item at its new position in grid
 	g[item.y][item.x] = item.symbol;
+}
+void resetItem(char g[][SIZEX], const Item& item)
+{
+	g[item.y][item.x] = TUNNEL;
 }
 //---------------------------------------------------------------------------
 //----- process key
@@ -580,7 +593,7 @@ void endProgram(Variables& vars)
 	}
 	if (vars.dead)
 	{
-		if(vars.mongooseDead)
+		if (vars.mongooseDead)
 			showMessage(clRed, clYellow, 40, 7, "YOU DIED TO THE MONGOOSE");
 		else
 			showMessage(clRed, clYellow, 40, 7, "YOU DIED");
