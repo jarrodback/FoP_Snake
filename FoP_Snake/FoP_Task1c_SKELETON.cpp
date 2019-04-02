@@ -39,6 +39,7 @@ const char TUNNEL(' ');    	//tunnel
 const char WALL('#');    	//border
 const char MOUSE('*');		//mouse
 const char PILL('+');
+const char MONGOOSE('M');
 //defining the command letters to move the spot on the maze
 const int  UP(72);			//up arrow
 const int  DOWN(80); 		//down arrow
@@ -65,8 +66,12 @@ struct Variables {
 	vector<Item> snake;
 	string name;
 	Item pill = { 0,0,PILL };
+	Item mongoose = { 0,0, MONGOOSE };
 	bool invincible = false;
 	int invincibleKeysPressed;
+	bool isMongoosePlaced = false;
+	int sleepTime = 300;
+	bool mongooseDead = false;
 };
 
 //---------------------------------------------------------------------------
@@ -83,8 +88,9 @@ int main()
 	void updateGame(char g[][SIZEX], const char m[][SIZEX], Item& s, const int kc, string& mess, Item& mouse, Variables& vars);
 	bool wantsToQuit(const int key);
 	bool wantsToCheat(const int key);
+	bool wantsToSlowDown(const int key);
 	bool isArrowKey(const int k);
-	int  getKeyPress();
+	int  getKeyPress(int& keypress);
 	void endProgram(Variables& vars);
 	void showMessage(const WORD backColour, const WORD textColour, int x, int y, const string& message);
 	void toggleCheat(Variables& vars);
@@ -113,15 +119,24 @@ int main()
 	system("cls");
 	initialiseGame(grid, maze, spot, mouse, vars);	//initialise grid (incl. walls and spot)
 	int key;							//current key selected by player
+	int previousDirection = -1;
 	do {
 		renderGame(grid, message, vars);			//display game info, modified grid and messages
-		key = toupper(getKeyPress()); 	//read in  selected key: arrow or letter commands
+		Sleep(vars.sleepTime);
+		if (_kbhit() || previousDirection == -1)
+			key = toupper(getKeyPress(previousDirection)); 	//read in  selected key: arrow or letter commands
+		else
+			key = previousDirection;
 		if (isArrowKey(key))
 			updateGame(grid, maze, spot, key, message, mouse, vars);
 		else
 			if (wantsToCheat(key))
 			{
 				toggleCheat(vars);
+			}
+			else if (wantsToSlowDown(key))
+			{
+				vars.sleepTime = 300;
 			}
 			else
 				message = "INVALID KEY!";  //set 'Invalid key' message
@@ -236,6 +251,9 @@ void updateGameData(const char g[][SIZEX], Item& spot, const int key, string& me
 		vars.snake[0].y += dy;	//go in that Y direction
 		vars.snake[0].x += dx;	//go in that X direction
 		break;
+	case MONGOOSE:
+		if (!vars.invincible)
+			vars.mongooseDead = true;
 	case TAIL:
 		if (vars.invincible)
 		{
@@ -298,6 +316,12 @@ void updateGameData(const char g[][SIZEX], Item& spot, const int key, string& me
 			vars.isPillPlaced = true;
 			vars.pillKeysPressed = 10;
 		}
+		if (vars.mouseEaten == 3 && vars.isMongoosePlaced == false)
+		{
+			setItemInitialCoordinates(vars.mongoose, g);
+			vars.isMongoosePlaced = true;
+		}
+		vars.sleepTime -= 20;
 		break;
 	case PILL:
 		while (vars.snake.size() > 4)
@@ -319,7 +343,7 @@ void updateGameData(const char g[][SIZEX], Item& spot, const int key, string& me
 		break;
 	}
 
-	if (vars.isPillPlaced == true)
+	if (vars.isPillPlaced)
 	{
 		vars.pillKeysPressed--;
 		if (vars.pillKeysPressed < 0)
@@ -329,14 +353,20 @@ void updateGameData(const char g[][SIZEX], Item& spot, const int key, string& me
 			vars.isPillPlaced = false;
 		}
 	}
-
 	if (vars.invincible)
 	{
 		vars.invincibleKeysPressed--;
 		if (vars.invincibleKeysPressed < 0)
-		{
 			vars.invincible = false;
-		}
+	}
+	if (vars.isMongoosePlaced)
+	{
+		do {
+			int my = random(2);
+			int mx = random(2);
+			vars.mongoose.x += mx;
+			vars.mongoose.y += my;
+		} while (g[vars.mongoose.y][vars.mongoose.x] != TUNNEL);
 	}
 }
 void updateGrid(char grid[][SIZEX], const char maze[][SIZEX], const Item& spot, const Item& mouse, Variables& vars)
@@ -354,6 +384,10 @@ void updateGrid(char grid[][SIZEX], const char maze[][SIZEX], const Item& spot, 
 	if (vars.mouseEaten % 2 == 0 && vars.mouseEaten != 0 && vars.isPillPlaced == false || vars.isPillPlaced == true)
 	{
 		placeItem(grid, vars.pill);
+	}
+	if (vars.mouseEaten == 3 && vars.isMongoosePlaced == false || vars.isMongoosePlaced == true)
+	{
+		placeItem(grid, vars.mongoose);
 	}
 }
 
@@ -396,14 +430,15 @@ void setKeyDirection(const int key, int& dx, int& dy)
 	}
 }
 
-int getKeyPress()
+int getKeyPress(int& previousKey)
 { //get key or command selected by user
   //KEEP THIS FUNCTION AS GIVEN
 	int keyPressed;
 	keyPressed = _getch();			//read in the selected arrow key or command letter
 	while (keyPressed == 224) 		//ignore symbol following cursor key
 		keyPressed = _getch();
-
+	if (keyPressed == DOWN || keyPressed == UP || keyPressed == LEFT || keyPressed == RIGHT)
+		previousKey = keyPressed;
 	return keyPressed;
 }
 
@@ -419,7 +454,10 @@ bool wantsToCheat(const int key)
 {
 	return (toupper(key) == ('C'));
 }
-
+bool wantsToSlowDown(const int key)
+{
+	return (toupper(key) == ('Z'));
+}
 //---------------------------------------------------------------------------
 //----- display info on screen
 //---------------------------------------------------------------------------
@@ -467,7 +505,7 @@ void renderGame(const char g[][SIZEX], const string& mess, Variables& vars)
 	showMessage(clBlack, clWhite, 40, 9, ("MICE EATEN: " + tostring(vars.mouseEaten)) + "/10");
 	showMessage(clBlack, clWhite, 40, 10, ("SCORE: " + tostring(vars.keysPressed)));
 	if (vars.invincible)
-		showMessage(clBlack, clWhite, 40, 12, ("INVINCIBLE!!!!!!: "));
+		showMessage(clRed, clYellow, 40, 12, ("SNAKE IS INVINCIBLE"));
 	else
 		showMessage(clBlack, clWhite, 40, 12, "");
 
@@ -511,6 +549,10 @@ void paintGrid(const char g[][SIZEX], const bool& invincible)
 			{
 				selectTextColour(clMagenta);
 			}
+			if (g[row][col] == MONGOOSE)
+			{
+				selectTextColour(clDarkBlue);
+			}
 			cout << g[row][col];	//output cell content
 		}
 		cout << endl;
@@ -537,7 +579,12 @@ void endProgram(Variables& vars)
 		}
 	}
 	if (vars.dead)
-		showMessage(clRed, clYellow, 40, 7, "YOU DIED");
+	{
+		if(vars.mongooseDead)
+			showMessage(clRed, clYellow, 40, 7, "YOU DIED TO THE MONGOOSE");
+		else
+			showMessage(clRed, clYellow, 40, 7, "YOU DIED");
+	}
 	system("pause");	//hold output screen until a keyboard key is hit
 }
 
