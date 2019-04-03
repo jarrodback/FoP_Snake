@@ -122,14 +122,18 @@ int main()
 	initialiseGame(grid, maze, spot, mouse, vars);	//initialise grid (incl. walls and spot)
 	int key;							//current key selected by player
 	int previousDirection = -1;
+	int initTime = time(NULL);
+	
 	do {
+		int currentTime = time(NULL);
+		vars.timeLeft = 3 -  (currentTime - initTime);
 		renderGame(grid, message, vars);			//display game info, modified grid and messages
-		//Sleep(vars.sleepTime);
+		Sleep(vars.sleepTime);
 		vars.timeLeft -= 1;
-		//if (_kbhit() || previousDirection == -1)
+		if (_kbhit() || previousDirection == -1)
 			key = toupper(getKeyPress(previousDirection)); 	//read in  selected key: arrow or letter commands
-		//else
-			//key = previousDirection;
+		else
+			key = previousDirection;
 		if (isArrowKey(key))
 			updateGame(grid, maze, spot, key, message, mouse, vars);
 		else
@@ -538,6 +542,7 @@ void paintGrid(const char g[][SIZEX], const bool& invincible)
 	selectBackColour(clBlack);
 	selectTextColour(clWhite);
 	gotoxy(0, 2);
+	
 	for (int row(0); row < SIZEY; ++row)
 	{
 		for (int col(0); col < SIZEX; ++col)
