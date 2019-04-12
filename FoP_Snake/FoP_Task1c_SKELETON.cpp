@@ -45,6 +45,10 @@ const int  UP(72);			//up arrow
 const int  DOWN(80); 		//down arrow
 const int  RIGHT(77);		//right arrow
 const int  LEFT(75);		//left arrow
+const int  PLAYER2UP(87);			//up arrow
+const int  PLAYER2DOWN(83); 		//down arrow
+const int  PLAYER2RIGHT(68);		//right arrow
+const int  PLAYER2LEFT(65);		//left arrow
 //defining the other command letters
 const char QUIT('Q');		//to end the game
 const char MAXMICE = 10;
@@ -53,103 +57,179 @@ struct Item {
 	int x, y;
 	char symbol;
 };
-
-struct Variables {
-	int mouseEaten = 0;
-	bool dead = false;
-	int keysPressed = 0;
-	int pillKeysPressed;
-	bool isPillPlaced = false;
-	bool cheatMode = false;
-	bool hasCheated = false;
-	int bestScore;
-	vector<Item> snake;
+struct Player {
+	int id;
 	string name;
+	vector<Item> snake;
+	int bestScore;
+	int mouseEaten = 0;
+	int key;
+	int invincibleKeysPressed = 0;
+	int previousDirection = -1;
+	bool invincible = false;
+	bool dead = false;
+
+	void MoveSnake(const int dx, const int dy)
+	{
+		for (int t = snake.size() - 1; t > 0; t--)
+		{
+			snake[t].x = snake[t - 1].x;
+			snake[t].y = snake[t - 1].y;
+		}
+		snake[0].y += dy;	//go in that Y direction
+		snake[0].x += dx;	//go in that X direction
+	}
+};
+struct GameData {
+	vector<Player> players;
 	Item pill = { 0,0,PILL };
 	Item mongoose = { 0,0, MONGOOSE };
 	Item mongoosePrevious = { 0,0, MONGOOSE };
-	bool invincible = false;
-	int invincibleKeysPressed;
-	bool isMongoosePlaced = false;
-	int sleepTime = 300;
-	bool mongooseDead = false;
-	int timeLeft = 200;
-};
+	Item mouse = { 0, 0, MOUSE };		//mouse's position and symbol.
 
+	int timeLeft = 200;
+	int keysPressed = 0;
+	int pillKeysPressed = 0;
+	int sleepTime = 300;
+	bool isPillPlaced = false;
+	bool isMongoosePlaced = false;
+	bool multiplayer;
+	bool cheatMode = false;
+	bool hasCheated = false;
+
+	int calculateMouseEaten()
+	{
+		int mouseEaten = 0;
+		for (Player& player : players)
+		{
+			mouseEaten += player.mouseEaten;
+		}
+		return mouseEaten;
+	}
+	bool checkIfAllPlayersAreDead()
+	{
+		bool allDead = true;
+		for (Player& player : players)
+		{
+			if (player.dead == false)
+			{
+				allDead = false;
+			}
+		}
+		return allDead;
+	}
+	bool checkCollision(Item& item1, Item& item2)
+	{
+		if (item1.x == item2.x && item1.y == item2.y)
+			return true;
+		return false;
+	}
+};
 //---------------------------------------------------------------------------
 //----- run game
 //---------------------------------------------------------------------------
 
 int main()
 {
-	Variables vars;
-
 	//function declarations (prototypes)
-	void initialiseGame(char g[][SIZEX], char m[][SIZEX], Item& spot, Item& mouse, Variables& vars);
-	void renderGame(const char g[][SIZEX], const string& mess, Variables& vars);
-	void updateGame(char g[][SIZEX], const char m[][SIZEX], Item& s, const int kc, string& mess, Item& mouse, Variables& vars);
+	void initialiseGame(char g[][SIZEX], char m[][SIZEX], GameData& gameData);
+	void renderGame(const char g[][SIZEX], const string& mess, GameData& gameData);
+	void updateGame(char g[][SIZEX], const char m[][SIZEX], string& message, GameData& gameData);
 	bool wantsToQuit(const int key);
 	bool wantsToCheat(const int key);
 	bool wantsToSlowDown(const int key);
-	bool isArrowKey(const int k);
+	bool isArrowKey(const int k, const bool multiplayer);
 	int  getKeyPress(int& keypress);
-	void endProgram(Variables& vars);
+	void endProgram(GameData& gameData);
 	void showMessage(const WORD backColour, const WORD textColour, int x, int y, const string& message);
-	void toggleCheat(Variables& vars);
-	int openFile(string& name);
+	void toggleCheat(GameData& gameData);
+	int getBestScore(string& name);
+	string tostring(int x);
 
+	GameData gameData;
+	Player player1;
+	gameData.players.push_back(player1);
+	gameData.players[0].id = gameData.players.size();
 	//local variable declarations 
 	char grid[SIZEY][SIZEX];			//grid for display
 	char maze[SIZEY][SIZEX];			//structure of the maze
-	Item spot = { 0, 0, SPOT }; 		//spot's position and symbol
-	Item mouse = { 0, 0, MOUSE };		//mouse's position and symbol.
 	string message("LET'S START...");	//current message to player
 
 	//action...
 	seed();								//seed the random number generator
 	SetConsoleTitle("FoP 2018-19 - Task 1c - Game Skeleton");
 
-	//Get Name
+	//Ask if Multiplayer
+	char type;
 	do {
 		system("cls");
-		showMessage(clBlack, clYellow, 10, 9, ("ENTER PLAYER NAME (MAX 20 CHARACTERS): "));
-		cin >> vars.name;
-	} while (vars.name.size() > 20);
+		showMessage(clBlack, clYellow, 10, 9, ("DO YOU WANT TO PLAY MULTIPLAYER (Y/N): "));
+		cin >> type;
+	} while (toupper(type) != 'N' && toupper(type) != 'Y');
+	if (toupper(type) == 'N')
+		gameData.multiplayer = false;
+	else
+	{
+		gameData.multiplayer = true;
+		Player player2;
+		gameData.players.push_back(player2);
+		gameData.players[1].id = gameData.players.size();
+	}
+	//Get Player 1 name
+	for (Player& player : gameData.players)
+	{
+		do {
+			system("cls");
+			showMessage(clBlack, clYellow, 10, 9, ("ENTER PLAYER" + tostring(player.id) + " NAME (MAX 20 CHARACTERS): "));
+			cin >> player.name;
+		} while (player.name.size() > 20);
+	}
 	//Load Player's score
-	vars.bestScore = openFile(vars.name);
+	for (Player& player : gameData.players)
+	{
+		player.bestScore = getBestScore(player.name);
+	}
 
 	system("cls");
-	initialiseGame(grid, maze, spot, mouse, vars);	//initialise grid (incl. walls and spot)
-	int key;							//current key selected by player
-	int previousDirection = -1;
+	initialiseGame(grid, maze, gameData);	//initialise grid (incl. walls and spot)
 	int initTime = time(NULL);
-	
 	do {
 		int currentTime = time(NULL);
-		vars.timeLeft = 3 -  (currentTime - initTime);
-		renderGame(grid, message, vars);			//display game info, modified grid and messages
-		Sleep(vars.sleepTime);
-		vars.timeLeft -= 1;
-		if (_kbhit() || previousDirection == -1)
-			key = toupper(getKeyPress(previousDirection)); 	//read in  selected key: arrow or letter commands
-		else
-			key = previousDirection;
-		if (isArrowKey(key))
-			updateGame(grid, maze, spot, key, message, mouse, vars);
-		else
-			if (wantsToCheat(key))
+		gameData.timeLeft = 300 - (currentTime - initTime);
+		renderGame(grid, message, gameData);			//display game info, modified grid and messages
+		Sleep(gameData.sleepTime);
+		for (Player& player : gameData.players)
+		{
+			if (_kbhit() || player.previousDirection == -1)
 			{
-				toggleCheat(vars);
-			}
-			else if (wantsToSlowDown(key))
-			{
-				vars.sleepTime = 300;
+				player.key = toupper(getKeyPress(player.previousDirection)); 	//read in  selected key: arrow or letter commands
 			}
 			else
-				message = "INVALID KEY!";  //set 'Invalid key' message
-	} while (!wantsToQuit(key) && vars.mouseEaten < MAXMICE && !vars.dead && vars.timeLeft != 0);		//while user does not want to quit
-	renderGame(grid, message, vars);			//display game info, modified grid and messages
-	endProgram(vars);						//display final message
+			{
+				player.key = player.previousDirection;
+			}
+		}
+		for (Player& player : gameData.players)
+		{
+			if (isArrowKey(player.key, gameData.multiplayer))
+				updateGame(grid, maze, message, gameData);
+			else
+				if (wantsToCheat(player.key))
+				{
+					toggleCheat(gameData);
+				}
+				else if (wantsToSlowDown(player.key))
+				{
+					gameData.sleepTime = 300;
+				}
+				else
+					message = "INVALID KEY!";  //set 'Invalid key' message
+		}
+
+	} while (!wantsToQuit(gameData.players[0].key) && gameData.players[0].mouseEaten < MAXMICE && (!gameData.checkIfAllPlayersAreDead()) && gameData.timeLeft > 0);		//while user does not want to quit
+	renderGame(grid, message, gameData);			//display game info, modified grid and messages
+	endProgram(gameData);						//display final message
+
 	return 0;
 }
 
@@ -158,28 +238,41 @@ int main()
 //----- initialise game state
 //---------------------------------------------------------------------------
 
-void initialiseGame(char grid[][SIZEX], char maze[][SIZEX], Item& spot, Item& mouse, Variables& vars)
+void initialiseGame(char grid[][SIZEX], char maze[][SIZEX], GameData& gameData)
 { //initialise grid and place spot in middle
 	void setInitialMazeStructure(char maze[][SIZEX]);
 	void setItemInitialCoordinates(Item&, const char maze[][SIZEX]);
-	void updateGrid(char g[][SIZEX], const char m[][SIZEX], const Item& i, const Item& mouse, Variables& vars);
+	void updateGrid(char g[][SIZEX], const char m[][SIZEX], GameData& gameData);
 
 	setInitialMazeStructure(maze);		//initialise maze
-	setItemInitialCoordinates(spot, maze);
-	vars.snake.push_back(spot);
-	for (int x = 0; x < 3; x++)
-	{
-		Item item = spot;
-		item.symbol = TAIL;
-		vars.snake.push_back(item);
-	}
-	setItemInitialCoordinates(mouse, maze);
-	while (mouse.x == spot.x && mouse.y == spot.y)
-	{
-		setItemInitialCoordinates(mouse, maze);
-	}
 
-	updateGrid(grid, maze, spot, mouse, vars);//prepare grid
+	for (int x = 0; x < gameData.players.size(); x++)
+	{
+		gameData.players[x].snake.push_back(Item{ 0,0,SPOT });
+		setItemInitialCoordinates(gameData.players[x].snake[0], maze);
+		for (int y = 0; y < 3; y++)
+		{
+			Item item = gameData.players[x].snake[0];
+			item.symbol = TAIL;
+			gameData.players[x].snake.push_back(item);
+		}
+	}
+	setItemInitialCoordinates(gameData.mouse, maze);
+	bool checkAgain = true;
+	while (checkAgain)
+	{
+		for (Player& player : gameData.players)
+		{
+			if (gameData.mouse.x == player.snake[0].x && gameData.mouse.y == player.snake[0].y)
+			{
+				setItemInitialCoordinates(gameData.mouse, maze);
+				checkAgain = true;
+			}
+			else
+				checkAgain = false;
+		}
+	}
+	updateGrid(grid, maze, gameData);//prepare grid
 }
 
 void setItemInitialCoordinates(Item& item, const char maze[][SIZEX])
@@ -223,188 +316,186 @@ void setInitialMazeStructure(char maze[][SIZEX])
 //----- Update Game
 //---------------------------------------------------------------------------
 
-void updateGame(char grid[][SIZEX], const char maze[][SIZEX], Item& spot, const int keyCode, string& mess, Item& mouse, Variables& vars)
+void updateGame(char grid[][SIZEX], const char maze[][SIZEX], string& message, GameData& gameData)
 { //update game
-	void updateGameData(const char g[][SIZEX], Item& spot, const int keyCode, string& mess, Item& mouse, Variables& vars);
-	void updateGrid(char g[][SIZEX], const char maze[][SIZEX], const Item& s, const Item& mouse, Variables& vars);
-	vars.keysPressed++;
+	void updateGameData(const char g[][SIZEX], string& message, GameData& gameData);
+	void updateGrid(char g[][SIZEX], const char m[][SIZEX], GameData& gameData);
 
-	updateGameData(grid, vars.snake[0], keyCode, mess, mouse, vars);		//move spot in required direction
-	updateGrid(grid, maze, vars.snake[0], mouse, vars);			//update grid information
+	updateGameData(grid, message, gameData);		//move spot in required direction
+	updateGrid(grid, maze, gameData);			//update grid information
 }
-void updateGameData(const char g[][SIZEX], Item& spot, const int key, string& mess, Item& mouse, Variables& vars)
+void updateGameData(const char g[][SIZEX], string& mess, GameData& gameData)
 { //move spot in required direction
-	bool isArrowKey(const int k);
-	void setKeyDirection(int k, int& dx, int& dy);
+	bool isArrowKey(const int k, const bool multiplayer);
+	void setKeyDirection(int k, int& dx, int& dy, int& id, const bool multiplayer);
 	bool wantsToQuit(const int key);
-	assert(isArrowKey(key));
+	for (Player& player : gameData.players)
+		assert(isArrowKey(player.key, gameData.multiplayer));
 
 	//reset message to blank
 	mess = "";
-
-	//calculate direction of movement for given key
-	int dx(0), dy(0);
-	setKeyDirection(key, dx, dy);
-
-	//check new target position in grid and update game data (incl. spot coordinates) if move is possible
-	switch (g[spot.y + dy][spot.x + dx])
-	{			//...depending on what's on the target position in grid...
-	case TUNNEL:		//can move
-		for (int t = vars.snake.size() - 1; t > 0; t--)
-		{
-			vars.snake[t].x = vars.snake[t - 1].x;
-			vars.snake[t].y = vars.snake[t - 1].y;
-		}
-		vars.snake[0].y += dy;	//go in that Y direction
-		vars.snake[0].x += dx;	//go in that X direction
-		break;
-	case MONGOOSE:
-		if (!vars.invincible)
-			vars.mongooseDead = true;
-	case TAIL:
-		if (vars.invincible)
-		{
-
-		}
-		else
-			vars.dead = true;
-		break;
-	case WALL:
-		if (vars.invincible)
-		{
-			int x = vars.snake[0].x + dx;
-			int y = vars.snake[0].y + dy;
-			if (x == 0)
-			{
-				vars.snake[0].x = SIZEX - 1;
-			}
-			if (x == SIZEX - 1)
-			{
-				vars.snake[0].x = 1;
-			}
-			if (y == 0)
-			{
-				vars.snake[0].y = SIZEY - 1;
-			}
-			if (y == SIZEY - 1)
-			{
-				vars.snake[0].y = 0;
-			}
-		}
-		else
-			vars.dead = true;
-		break;
-	case MOUSE:			//Hit a mouse and eat it
-		setItemInitialCoordinates(mouse, g);
-		//Update the movement
-		for (int t = vars.snake.size() - 1; t > 0; t--)
-		{
-			vars.snake[t].x = vars.snake[t - 1].x;
-			vars.snake[t].y = vars.snake[t - 1].y;
-		}
-		//Add the 2 new nails
-		if (!vars.cheatMode)
-		{
-			for (int x = 0; x < 2; x++)
-			{
-				Item item = spot;
-				item.symbol = TAIL;
-				item.x = vars.snake.back().x;
-				item.y = vars.snake.back().y;
-				vars.snake.push_back(item);
-			}
-		}
-		//Move the snake head
-		vars.snake[0].y += dy;	//go in that Y direction
-		vars.snake[0].x += dx;	//go in that X direction;
-		vars.mouseEaten += 1;
-		if (vars.mouseEaten % 2 == 0 && vars.mouseEaten != 0 && vars.isPillPlaced == false)
-		{
-			setItemInitialCoordinates(vars.pill, g);
-			vars.isPillPlaced = true;
-			vars.pillKeysPressed = 10;
-		}
-		if (vars.mouseEaten == 3 && vars.isMongoosePlaced == false)
-		{
-			setItemInitialCoordinates(vars.mongoose, g);
-			vars.isMongoosePlaced = true;
-		}
-		vars.sleepTime -= 20;
-		break;
-	case PILL:
-		while (vars.snake.size() > 4)
-		{
-			vars.snake.pop_back();
-		}
-		vars.pill.x = -1;
-		vars.pill.y = -1;
-		vars.isPillPlaced = false;
-		for (int t = vars.snake.size() - 1; t > 0; t--)
-		{
-			vars.snake[t].x = vars.snake[t - 1].x;
-			vars.snake[t].y = vars.snake[t - 1].y;
-		}
-		vars.snake[0].y += dy;	//go in that Y direction
-		vars.snake[0].x += dx;	//go in that X direction
-		vars.invincible = true;
-		vars.invincibleKeysPressed = 20;
-		break;
-	}
-
-	if (vars.isPillPlaced)
-	{
-		vars.pillKeysPressed--;
-		if (vars.pillKeysPressed < 0)
-		{
-			vars.pill.x = -1;
-			vars.pill.y = -1;
-			vars.isPillPlaced = false;
-		}
-	}
-	if (vars.invincible)
-	{
-		vars.invincibleKeysPressed--;
-		if (vars.invincibleKeysPressed < 0)
-			vars.invincible = false;
-	}
-	if (vars.isMongoosePlaced)
+	gameData.keysPressed++;
+	//move mongoose
+	if (gameData.isMongoosePlaced)
 	{
 		int my, mx;
 		do {
-			my = rand() % 3;
-			mx = rand() % 3;
-			if (my == 2)
-				my = -1;
-			if (mx == 2)
-				mx = -1;
-		} while (g[vars.mongoose.y + my][vars.mongoose.x + mx] != TUNNEL);
-		vars.mongoose.x += mx;
-		vars.mongoose.y += my;
-		vars.mongoosePrevious = vars.mongoose;
+			my = (rand() % 3) - 1;
+			mx = (rand() % 3) - 1;
+		} while (g[gameData.mongoose.y + my][gameData.mongoose.x + mx] != TUNNEL && g[gameData.mongoose.y + my][gameData.mongoose.x + mx] != SPOT);
+
+		gameData.mongoose.x += mx;
+		gameData.mongoose.y += my;
+		gameData.mongoosePrevious = gameData.mongoose;
+
+		for (Player& player : gameData.players)
+			if (gameData.checkCollision(gameData.mongoose, player.snake[0]))
+				player.dead = true;
+	}
+	//check new target position in grid and update game data (incl. spot coordinates) if move is possible
+	for (Player& player : gameData.players)
+	{
+		//calculate direction of movement for given key
+		int dx(0), dy(0);
+		setKeyDirection(player.key, dx, dy, player.id, gameData.multiplayer);
+
+		switch (g[player.snake[0].y + dy][player.snake[0].x + dx])
+		{			//...depending on what's on the target position in grid...
+
+		case TUNNEL:		//can move
+			player.MoveSnake(dx, dy);
+			break;
+
+		case MONGOOSE:
+		case TAIL:
+			if (!player.invincible)
+				player.dead = true;
+			break;
+
+		case WALL:
+			if (player.invincible)
+			{
+				int x = player.snake[0].x + dx;
+				int y = player.snake[0].y + dy;
+				if (x == 0)
+				{
+					player.snake[0].x = SIZEX - 1;
+				}
+				if (x == SIZEX - 1)
+				{
+					player.snake[0].x = 1;
+				}
+				if (y == 0)
+				{
+					player.snake[0].y = SIZEY - 1;
+				}
+				if (y == SIZEY - 1)
+				{
+					player.snake[0].y = 0;
+				}
+			}
+			else
+				player.dead = true;
+			break;
+
+		case MOUSE:			//Hit a mouse and eat it
+		{
+			setItemInitialCoordinates(gameData.mouse, g);
+			//Update the movement
+			player.MoveSnake(dx, dy);
+			//Add the 2 new nails
+			if (!gameData.cheatMode)
+			{
+				for (int x = 0; x < 2; x++)
+				{
+					Item item = player.snake[0];
+					item.symbol = TAIL;
+					item.x = player.snake.back().x;
+					item.y = player.snake.back().y;
+					player.snake.push_back(item);
+				}
+			}
+			player.mouseEaten += 1;
+
+			if (gameData.calculateMouseEaten() % 2 == 0 && gameData.calculateMouseEaten() != 0 && gameData.isPillPlaced == false)
+			{
+				setItemInitialCoordinates(gameData.pill, g);
+				gameData.isPillPlaced = true;
+				gameData.pillKeysPressed = 10;
+			}
+			if (gameData.calculateMouseEaten() == 3 && gameData.isMongoosePlaced == false)
+			{
+				setItemInitialCoordinates(gameData.mongoose, g);
+				gameData.isMongoosePlaced = true;
+			}
+			gameData.sleepTime -= 20;
+		}
+		break;
+
+		case PILL:
+			while (player.snake.size() > 4)
+			{
+				player.snake.pop_back();
+			}
+			gameData.pill.x = -1;
+			gameData.pill.y = -1;
+			gameData.isPillPlaced = false;
+			player.MoveSnake(dx, dy);
+			player.invincible = true;
+			player.invincibleKeysPressed = 20;
+			break;
+
+		case SPOT:
+			Player currentPlayer = player;
+			for (Player& player : gameData.players)
+				if (gameData.checkCollision(currentPlayer.snake[0], player.snake[0]) && currentPlayer.id != player.id)
+					player.dead == true;
+			break;
+		}
+		if (player.invincible)
+		{
+			player.invincibleKeysPressed--;
+			if (player.invincibleKeysPressed < 0)
+				player.invincible = false;
+		}
+	}
+	if (gameData.isPillPlaced)
+	{
+		gameData.pillKeysPressed--;
+		if (gameData.pillKeysPressed < 0)
+		{
+			gameData.pill.x = -1;
+			gameData.pill.y = -1;
+			gameData.isPillPlaced = false;
+		}
 	}
 }
-void updateGrid(char grid[][SIZEX], const char maze[][SIZEX], const Item& spot, const Item& mouse, Variables& vars)
+void updateGrid(char grid[][SIZEX], const char maze[][SIZEX], GameData& gameData)
 { //update grid configuration after each move
 	void placeMaze(char g[][SIZEX], const char b[][SIZEX]);
 	void placeItem(char g[][SIZEX], const Item&);
 	void resetItem(char g[][SIZEX], const Item& item);
 
 	placeMaze(grid, maze);	//reset the empty maze configuration into grid
-	for each (Item item in (vars.snake))
+	for (int x = 0; x < gameData.players.size(); x++)
 	{
-		placeItem(grid, item);
+		for (int y = gameData.players[x].snake.size(); y > 0; y--)
+		{
+			placeItem(grid, gameData.players[x].snake[y - 1]);
+		}
 	}
-	placeItem(grid, spot);	//set spot in grid
-	placeItem(grid, mouse);	//set mouse in grid
-	if (vars.mouseEaten % 2 == 0 && vars.mouseEaten != 0 && vars.isPillPlaced == false || vars.isPillPlaced == true)
+	placeItem(grid, gameData.mouse);	//set mouse in grid
+
+	if (gameData.calculateMouseEaten() == 0 && gameData.calculateMouseEaten() != 0 && gameData.isPillPlaced == false || gameData.isPillPlaced == true)
 	{
-		placeItem(grid, vars.pill);
+		placeItem(grid, gameData.pill);
 	}
-	if (vars.mouseEaten == 3 && vars.isMongoosePlaced == false || vars.isMongoosePlaced == true)
+	if (gameData.calculateMouseEaten() == 3 && gameData.isMongoosePlaced == false || gameData.isMongoosePlaced == true)
 	{
-		resetItem(grid, vars.mongoosePrevious);
-		placeItem(grid, vars.mongoose);
+		resetItem(grid, gameData.mongoosePrevious);
+		placeItem(grid, gameData.mongoose);
 	}
+
 }
 
 void placeMaze(char grid[][SIZEX], const char maze[][SIZEX])
@@ -425,31 +516,56 @@ void resetItem(char g[][SIZEX], const Item& item)
 //---------------------------------------------------------------------------
 //----- process key
 //---------------------------------------------------------------------------
-void setKeyDirection(const int key, int& dx, int& dy)
+void setKeyDirection(const int key, int& dx, int& dy, int& id, const bool multiplayer)
 { //calculate direction indicated by key
-	bool isArrowKey(const int k);
-	assert(isArrowKey(key));
-	switch (key)	//...depending on the selected key...
+	bool isArrowKey(const int k, const bool multiplayer);
+	assert(isArrowKey(key, multiplayer));
+
+	if (id == 1)
 	{
-	case LEFT:  	//when LEFT arrow pressed...
-		dx = -1;	//decrease the X coordinate
-		dy = 0;
-		break;
-	case RIGHT: 	//when RIGHT arrow pressed...
-		dx = +1;	//increase the X coordinate
-		dy = 0;
-		break;
-	case UP:  	//when UP arrow pressed...
-		dx = 0;	//decrease the Y coordinate
-		dy = -1;
-		break;
-	case DOWN: 	//when DOWN arrow pressed...
-		dx = 0;	//increase the Y coordinate
-		dy = +1;
-		break;
+		switch (key)	//...depending on the selected key...
+		{
+		case LEFT:  	//when LEFT arrow pressed...
+			dx = -1;	//decrease the X coordinate
+			dy = 0;
+			break;
+		case RIGHT: 	//when RIGHT arrow pressed...
+			dx = +1;	//increase the X coordinate
+			dy = 0;
+			break;
+		case UP:  	//when UP arrow pressed...
+			dx = 0;	//decrease the Y coordinate
+			dy = -1;
+			break;
+		case DOWN: 	//when DOWN arrow pressed...
+			dx = 0;	//increase the Y coordinate
+			dy = +1;
+			break;
+		}
+	}
+	if (id == 2)
+	{
+		switch (key)	//...depending on the selected key...
+		{
+		case PLAYER2LEFT:
+			dx = -1;	//decrease the X coordinate
+			dy = 0;
+			break;
+		case PLAYER2RIGHT:
+			dx = +1;	//increase the X coordinate
+			dy = 0;
+			break;
+		case PLAYER2UP:
+			dx = 0;	//decrease the Y coordinate
+			dy = -1;
+			break;
+		case PLAYER2DOWN:
+			dx = 0;	//increase the Y coordinate
+			dy = +1;
+			break;
+		}
 	}
 }
-
 int getKeyPress(int& previousKey)
 { //get key or command selected by user
   //KEEP THIS FUNCTION AS GIVEN
@@ -457,14 +573,14 @@ int getKeyPress(int& previousKey)
 	keyPressed = _getch();			//read in the selected arrow key or command letter
 	while (keyPressed == 224) 		//ignore symbol following cursor key
 		keyPressed = _getch();
-	if (keyPressed == DOWN || keyPressed == UP || keyPressed == LEFT || keyPressed == RIGHT)
+	if (keyPressed == DOWN || keyPressed == UP || keyPressed == LEFT || keyPressed == RIGHT || keyPressed == PLAYER2DOWN || keyPressed == PLAYER2UP || keyPressed == PLAYER2LEFT || keyPressed == PLAYER2RIGHT)
 		previousKey = keyPressed;
 	return keyPressed;
 }
 
-bool isArrowKey(const int key)
+bool isArrowKey(const int key, const bool multiplayer)
 {	//check if the key pressed is an arrow key (also accept 'K', 'M', 'H' and 'P')
-	return (key == LEFT) || (key == RIGHT) || (key == UP) || (key == DOWN) || (key == 'K') || (key == 'M') || (key == 'H') || (key == 'P'); //Add KMHP for movement >:(
+	return (key == LEFT) || (key == RIGHT) || (key == UP) || (key == DOWN) || ((key == PLAYER2LEFT) && multiplayer) || ((key == PLAYER2RIGHT) && multiplayer) || ((key == PLAYER2UP) && multiplayer) || ((key == PLAYER2DOWN) && multiplayer); //Add KMHP for movement >:(
 }
 bool wantsToQuit(const int key)
 {	//check if the user wants to quit (when key is 'Q' or 'q')
@@ -501,12 +617,12 @@ void showMessage(const WORD backColour, const WORD textColour, int x, int y, con
 	selectTextColour(textColour);
 	cout << message + string(40 - message.length(), ' ');
 }
-void renderGame(const char g[][SIZEX], const string& mess, Variables& vars)
+void renderGame(const char g[][SIZEX], const string& mess, GameData& gameData)
 { //display game title, messages, maze, spot and other items on screen
 	string tostring(char x);
 	string tostring(int x);
 	void showMessage(const WORD backColour, const WORD textColour, int x, int y, const string& message);
-	void paintGrid(const char g[][SIZEX], const bool& invincible);
+	void paintGrid(const char g[][SIZEX], const GameData& gameData);
 	//display game title
 	showMessage(clBlack, clGreen, 0, 0, "___GAME___");
 	showMessage(clWhite, clBlack, 40, 0, "Fop Task 1C " + getDate() + " " + getTime());
@@ -514,35 +630,59 @@ void renderGame(const char g[][SIZEX], const string& mess, Variables& vars)
 	showMessage(clWhite, clDarkMagenta, 40, 2, "b8043407 Jarrod Back GROUP 1-9");
 	//display menu options available
 	showMessage(clRed, clYellow, 40, 3, "TO MOVE  - USE KEYBOARD ARROWS ");
-	if (vars.cheatMode == false)
+
+	if (gameData.cheatMode == false)
 		showMessage(clRed, clYellow, 40, 4, "TO CHEAT - ENTER 'C'           ");
 	else
 		showMessage(clRed, clYellow, 40, 4, "CHEAT MODE: ON |TO DEACTIVATE - ENTER C");
-	showMessage(clRed, clYellow, 40, 5, "TO QUIT  - ENTER 'Q'           ");
-	showMessage(clBlack, clWhite, 40, 6, ("TIME LEFT: " + tostring(vars.timeLeft)));
-	showMessage(clBlack, clWhite, 40, 7, ("NAME: " + vars.name));
-	showMessage(clBlack, clWhite, 40, 8, ("BEST SCORE: " + tostring(vars.bestScore)));
-	showMessage(clBlack, clWhite, 40, 9, ("MICE EATEN: " + tostring(vars.mouseEaten)) + "/10");
-	showMessage(clBlack, clWhite, 40, 10, ("SCORE: " + tostring(vars.keysPressed)));
-	if (vars.invincible)
-		showMessage(clRed, clYellow, 40, 12, ("SNAKE IS INVINCIBLE"));
-	else
-		showMessage(clBlack, clWhite, 40, 12, "");
 
+	showMessage(clRed, clYellow, 40, 5, "TO QUIT  - ENTER 'Q'           ");
+	showMessage(clBlack, clWhite, 40, 6, ("TIME LEFT: " + tostring(gameData.timeLeft)));
+	showMessage(clBlack, clWhite, 40, 7, ("NAME: " + gameData.players[0].name));
+	showMessage(clBlack, clWhite, 40, 8, ("BEST SCORE: " + tostring(gameData.players[0].bestScore)));
+	showMessage(clBlack, clWhite, 40, 9, ("MICE EATEN: " + tostring(gameData.players[0].mouseEaten)) + "/10");
+	showMessage(clBlack, clWhite, 40, 10, ("SCORE: " + tostring(gameData.keysPressed)));
+	if (gameData.players[0].invincible)
+		showMessage(clRed, clYellow, 40, 14, ("SNAKE 1 IS INVINCIBLE"));
+	else
+		showMessage(clBlack, clWhite, 40, 14, "");
+	if (gameData.multiplayer && gameData.players[1].invincible)
+		showMessage(clRed, clYellow, 40, 16, ("SNAKE 2 IS INVINCIBLE"));
+	else
+		showMessage(clBlack, clWhite, 40, 16, "");
+	if (gameData.multiplayer)
+	{
+		showMessage(clBlack, clWhite, 40, 7, "");
+		showMessage(clBlack, clWhite, 40, 8, "");
+		showMessage(clBlack, clWhite, 40, 9, "");
+
+		showMessage(clRed, clYellow, 80, 0, ("[MULTIPLAYER OPTIONS]"));
+		showMessage(clBlack, clGreen, 80, 1, ("[PLAYER1]"));
+		showMessage(clBlack, clWhite, 80, 2, ("Name: " + gameData.players[0].name));
+		showMessage(clBlack, clWhite, 80, 3, ("Movement: Arrow Keys"));
+		showMessage(clBlack, clWhite, 80, 4, ("Best Score: " + tostring(gameData.players[0].bestScore)));
+		showMessage(clBlack, clWhite, 80, 5, ("Mice Eaten: " + tostring(gameData.players[0].mouseEaten)));
+
+		showMessage(clBlack, clBlue, 80, 6, ("[PLAYER2]"));
+		showMessage(clBlack, clWhite, 80, 7, ("Name: " + gameData.players[1].name));
+		showMessage(clBlack, clWhite, 80, 8, ("Movement: WASD"));
+		showMessage(clBlack, clWhite, 80, 9, ("Best Score: " + tostring(gameData.players[1].bestScore)));
+		showMessage(clBlack, clWhite, 80, 10, ("Mice Eaten: " + tostring(gameData.players[1].mouseEaten)));
+	}
 
 
 	//print auxiliary messages if any
 	showMessage(clBlack, clWhite, 40, 15, mess);	//display current message
 	//display grid contents
-	paintGrid(g, vars.invincible);
+	paintGrid(g, gameData);
 }
 
-void paintGrid(const char g[][SIZEX], const bool& invincible)
+void paintGrid(const char g[][SIZEX], const GameData& gameData)
 { //display grid content on screen
 	selectBackColour(clBlack);
 	selectTextColour(clWhite);
 	gotoxy(0, 2);
-	
+
 	for (int row(0); row < SIZEY; ++row)
 	{
 		for (int col(0); col < SIZEX; ++col)
@@ -550,21 +690,52 @@ void paintGrid(const char g[][SIZEX], const bool& invincible)
 			selectTextColour(clWhite);
 			if (g[row][col] == SPOT)
 			{
-				if (invincible)
-					selectTextColour(clRed);
-				else
-					selectTextColour(clGreen);
+				if (row == gameData.players[0].snake[0].y && col == gameData.players[0].snake[0].x)
+				{
+
+					if (gameData.players[0].invincible)
+						selectTextColour(clRed);
+					else
+						selectTextColour(clGreen);
+				}
+				if (gameData.multiplayer && row == gameData.players[1].snake[0].y && col == gameData.players[1].snake[0].x)
+				{
+					if (gameData.players[0].invincible)
+						selectTextColour(clRed);
+					else
+						selectTextColour(clBlue);
+				}
 			}
+
 			if (g[row][col] == MOUSE)
 			{
 				selectTextColour(clYellow);
 			}
 			if (g[row][col] == TAIL)
 			{
-				if (invincible)
-					selectTextColour(clRed);
-				else
-					selectTextColour(clGreen);
+				for (int x = 1; x < gameData.players[0].snake.size(); x++)
+				{
+					if (row == gameData.players[0].snake[x].y && col == gameData.players[0].snake[x].x)
+					{
+						if (gameData.players[0].invincible)
+							selectTextColour(clRed);
+						else
+							selectTextColour(clGreen);
+					}
+				}
+				if (gameData.multiplayer)
+				{
+					for (int x = 1; x < gameData.players[1].snake.size(); x++)
+					{
+						if (row == gameData.players[1].snake[x].y && col == gameData.players[1].snake[x].x)
+						{
+							if (gameData.players[1].invincible)
+								selectTextColour(clRed);
+							else
+								selectTextColour(clBlue);
+						}
+					}
+				}
 			}
 			if (g[row][col] == PILL)
 			{
@@ -580,39 +751,40 @@ void paintGrid(const char g[][SIZEX], const bool& invincible)
 	}
 }
 
-void endProgram(Variables& vars)
+void endProgram(GameData& gameData)
 {
 	void showMessage(const WORD backColour, const WORD textColour, int x, int y, const string& message);
-	showMessage(clRed, clYellow, 40, 8, "QUITTING GAME");
-	if (vars.mouseEaten >= MAXMICE)
+
+	for (Player& player : gameData.players)
 	{
-		showMessage(clRed, clYellow, 40, 7, "YOU WON");
-		//Save score if not cheated
-		if (!vars.hasCheated)
+		if (player.mouseEaten >= MAXMICE)
 		{
-			if (vars.keysPressed > vars.bestScore || vars.bestScore == 500)
+			showMessage(clRed, clYellow, 40, 12, "YOU WON");
+			//Save score if not cheated
+			if (!gameData.hasCheated)
 			{
-				ofstream scoreFile;
-				scoreFile.open(vars.name + ".txt");
-				scoreFile << vars.keysPressed;
-				scoreFile.close();
+				if (gameData.keysPressed > player.bestScore || player.bestScore == 500)
+				{
+					ofstream scoreFile;
+					scoreFile.open(player.name + ".txt");
+					scoreFile << gameData.keysPressed;
+					scoreFile.close();
+				}
 			}
 		}
-	}
-	if (vars.dead)
-	{
-		if (vars.mongooseDead)
-			showMessage(clRed, clYellow, 40, 7, "YOU DIED TO THE MONGOOSE");
-		else 
-			showMessage(clRed, clYellow, 40, 7, "YOU DIED");
-	}
-	if (vars.timeLeft == 0)
-		showMessage(clRed, clYellow, 40, 7, "YOU RAN OUT OF TIME");
 
+		if (player.dead)
+			showMessage(clRed, clYellow, 40, 12, "PLAYER " + tostring(player.id) + " DIED");
+	}
+	if (gameData.timeLeft == 0)
+		showMessage(clRed, clYellow, 40, 12, "YOU RAN OUT OF TIME");
+
+	showMessage(clRed, clYellow, 40, 12, "QUITTING GAME");
 	system("pause");	//hold output screen until a keyboard key is hit
+
 }
 
-int openFile(string& name)
+int getBestScore(string& name)
 {
 	string strBestScore = "";
 	int bestScore;
@@ -630,22 +802,21 @@ int openFile(string& name)
 	return bestScore;
 }
 
-void toggleCheat(Variables& vars)
+void toggleCheat(GameData& gameData)
 {
-	if (vars.cheatMode == false)
+	if (gameData.cheatMode == false)
 	{
-		vars.cheatMode = true;
-		vars.hasCheated = true;
+		gameData.cheatMode = true;
+		gameData.hasCheated = true;
 		for (int x = 0; x < 3; x++)
 		{
 			cout << '\a';
 			Sleep(1000);
 		}
-		while (vars.snake.size() > 4)
-		{
-			vars.snake.pop_back();
-		}
+		for (Player& player : gameData.players)
+			while (player.snake.size() > 4)
+				player.snake.pop_back();
 	}
 	else
-		vars.cheatMode = false;
+		gameData.cheatMode = false;
 }
